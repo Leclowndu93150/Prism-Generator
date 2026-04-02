@@ -63,16 +63,17 @@ object PrismProjectGenerator {
             """
             |.gradle/
             |build/
-            |.intellijPlatform/
+            |!gradle/wrapper/gradle-wrapper.jar
+            |.kotlin
             |.idea/
             |*.iml
             |*.ipr
             |*.iws
             |out/
+            |runs/
             |run/
-            |logs/
+            |**/run/
             |.DS_Store
-            |Thumbs.db
             """.trimMargin() + "\n"
         )
     }
@@ -83,14 +84,8 @@ object PrismProjectGenerator {
     private fun writeGradleProperties(root: File, config: PrismConfig) {
         root.resolve("gradle.properties").writeText(
             buildString {
-                appendLine("org.gradle.jvmargs=-Xmx2G")
+                appendLine("org.gradle.jvmargs=-Xmx3G")
                 appendLine("org.gradle.daemon=false")
-                appendLine()
-                appendLine("mod_id=${config.modId}")
-                appendLine("mod_name=${config.modName}")
-                appendLine("mod_version=1.0.0")
-                appendLine("mod_group=${config.groupId}")
-                appendLine("mod_license=${config.license}")
             }
         )
     }
@@ -105,38 +100,57 @@ object PrismProjectGenerator {
             buildString {
                 appendLine("pluginManagement {")
                 appendLine("    repositories {")
+                appendLine("        maven { url = uri(\"https://maven.leclowndu93150.dev/releases\") }")
                 appendLine("        gradlePluginPortal()")
                 appendLine("        mavenCentral()")
-                appendLine("        maven(\"https://maven.architectury.dev\")")
-                appendLine("        maven(\"https://maven.fabricmc.net\")")
-                appendLine("        maven(\"https://maven.neoforged.net/releases\")")
-                appendLine("        maven(\"https://maven.minecraftforge.net\")")
+                appendLine("        maven { url = uri(\"https://maven.fabricmc.net/\") }")
+                appendLine("        maven { url = uri(\"https://maven.neoforged.net/releases\") }")
+                appendLine("        maven { url = uri(\"https://repo.spongepowered.org/repository/maven-public/\") }")
                 if (needsGtnh) {
-                    appendLine("        maven(\"https://maven.gtnewhorizons.com\")")
+                    appendLine("        maven { url = uri(\"https://nexus.gtnewhorizons.com/repository/public/\") }")
                 }
                 appendLine("    }")
                 appendLine("}")
                 appendLine()
                 appendLine("plugins {")
-                appendLine("    id(\"dev.deftu.gradle.multiversion-root\") version \"2.+\"")
+                appendLine("    id(\"org.gradle.toolchains.foojay-resolver-convention\") version \"0.9.0\"")
+                appendLine("    id(\"dev.prism.settings\") version \"+\"")
                 appendLine("}")
                 appendLine()
                 appendLine("rootProject.name = \"${config.projectName}\"")
                 appendLine()
+                appendLine("prism {")
+
+                if (config.enableSharedCommon) {
+                    appendLine("    sharedCommon()")
+                    appendLine()
+                }
 
                 for (version in config.versions) {
+                    appendLine("    version(\"${version.mcVersion}\") {")
                     if (version.multiLoader) {
-                        appendLine("include(\"versions:${version.mcVersion}:common\")")
+                        appendLine("        common()")
                         for (loader in version.loaders) {
-                            appendLine("include(\"versions:${version.mcVersion}:$loader\")")
+                            appendLine("        ${loaderSettingsName(loader)}()")
                         }
                     } else {
                         val loader = version.loaders.firstOrNull() ?: continue
-                        appendLine("include(\"versions:${version.mcVersion}:$loader\")")
+                        appendLine("        ${loaderSettingsName(loader)}()")
                     }
+                    appendLine("    }")
                 }
+
+                appendLine("}")
             }
         )
+    }
+
+    private fun loaderSettingsName(loader: String): String = when (loader) {
+        "fabric" -> "fabric"
+        "neoforge" -> "neoforge"
+        "forge" -> "forge"
+        "legacyforge" -> "legacyForge"
+        else -> loader
     }
 
     // -------------------------------------------------------------------------
@@ -223,7 +237,7 @@ object PrismProjectGenerator {
             buildString {
                 appendLine("distributionBase=GRADLE_USER_HOME")
                 appendLine("distributionPath=wrapper/dists")
-                appendLine("distributionUrl=https\\://services.gradle.org/distributions/gradle-8.12-bin.zip")
+                appendLine("distributionUrl=https\\://services.gradle.org/distributions/gradle-9.2.0-bin.zip")
                 appendLine("networkTimeout=10000")
                 appendLine("validateDistributionUrl=true")
                 appendLine("zipStoreBase=GRADLE_USER_HOME")

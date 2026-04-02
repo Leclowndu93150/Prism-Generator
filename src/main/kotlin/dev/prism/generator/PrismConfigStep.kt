@@ -1,5 +1,6 @@
 package dev.prism.generator
 
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardBaseData
 import com.intellij.ide.wizard.NewProjectWizardStep
@@ -14,10 +15,12 @@ import javax.swing.*
 
 class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
 
+    private val props = PropertiesComponent.getInstance()
+
     var modId: String = ""
     var modName: String = ""
-    var groupId: String = "com.example"
-    var license: String? = "MIT"
+    var groupId: String = props.getValue("prism.lastGroupId", "com.example")
+    var license: String? = props.getValue("prism.lastLicense", "MIT")
     val versionEntries: MutableList<VersionEntry> = mutableListOf(VersionEntry())
     var enableKotlin: Boolean = false
     var enableSharedCommon: Boolean = false
@@ -71,6 +74,12 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             "Legacy Forge" -> "legacyforge"
             else -> "neoforge"
         }
+
+        fun deriveModId(name: String): String =
+            name.lowercase().replace(Regex("[^a-z0-9]"), "_").replace(Regex("_+"), "_").trim('_')
+
+        fun deriveModName(name: String): String =
+            name.split(Regex("[-_ ]+")).joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
     }
 
     private fun findBaseData(): NewProjectWizardBaseData? {
@@ -95,8 +104,8 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
     override fun setupUI(builder: Panel) {
         val baseData = findBaseData()
         val projectName = baseData?.name ?: "mymod"
-        if (modId.isEmpty()) modId = projectName.lowercase().replace(Regex("[^a-z0-9_]"), "")
-        if (modName.isEmpty()) modName = projectName.replaceFirstChar { it.uppercase() }
+        if (modId.isEmpty()) modId = deriveModId(projectName)
+        if (modName.isEmpty()) modName = deriveModName(projectName)
 
         builder.apply {
             group("Mod Metadata") {
@@ -107,7 +116,11 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             }
 
             group("Minecraft Versions") {
-                row { cell(createVersionListComponent()).resizableColumn() }
+                row {
+                    cell(createVersionListComponent())
+                        .resizableColumn()
+                        .align(AlignX.FILL)
+                }
             }
 
             group("Options") {
@@ -366,15 +379,21 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
     override fun setupProject(project: Project) {
         for (vp in versionPanels) vp.syncToEntry()
 
+        props.setValue("prism.lastGroupId", groupId)
+        props.setValue("prism.lastLicense", license)
+
         val baseData = findBaseData()
         val projectPath = baseData?.path ?: project.basePath ?: return
         val projectName = baseData?.name ?: project.name
 
+        if (modId.isBlank()) modId = deriveModId(projectName)
+        if (modName.isBlank()) modName = deriveModName(projectName)
+
         val config = PrismProjectGenerator.PrismConfig(
             projectPath = "$projectPath/$projectName",
             projectName = projectName,
-            modId = modId.ifBlank { projectName.lowercase().replace(Regex("[^a-z0-9_]"), "") },
-            modName = modName.ifBlank { projectName },
+            modId = modId,
+            modName = modName,
             groupId = groupId.ifBlank { "com.example" },
             license = license ?: "MIT",
             versions = versionEntries.map { entry ->
