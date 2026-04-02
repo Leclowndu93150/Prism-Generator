@@ -2,10 +2,11 @@ plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.1.20"
     id("org.jetbrains.intellij.platform") version "2.10.2"
+    `maven-publish`
 }
 
 group = "dev.prism"
-version = "1.0.0"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -41,4 +42,25 @@ intellijPlatform {
 
 kotlin {
     jvmToolchain(21)
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = "dev.prism"
+            artifactId = "prism-generator"
+            version = project.version.toString()
+            artifact(tasks.named("buildPlugin").map { File(project.layout.buildDirectory.asFile.get(), "distributions/prism-generator-${project.version}.zip") })
+        }
+    }
+    repositories {
+        maven {
+            name = "Leclown"
+            url = uri("https://maven.leclowndu93150.dev/releases")
+            credentials {
+                username = System.getenv("MAVEN_USER") ?: ""
+                password = System.getenv("MAVEN_PASS") ?: ""
+            }
+        }
+    }
 }

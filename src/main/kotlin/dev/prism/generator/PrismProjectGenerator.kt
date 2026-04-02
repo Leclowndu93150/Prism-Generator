@@ -22,18 +22,19 @@ object PrismProjectGenerator {
     data class VersionConfig(
         val mcVersion: String,
         val multiLoader: Boolean,
-        val loaders: List<String>
+        val loaders: List<String>,
+        val fabricLoaderVersion: String = "",
+        val fabricApiVersion: String = "",
+        val neoforgeVersion: String = "",
+        val forgeVersion: String = "",
     )
 
     // Loader / API versions per Minecraft version
     private val LOADER_VERSIONS: Map<String, Map<String, String>> = mapOf(
         "1.7.10" to mapOf("legacyforge" to "10.13.4.1614"),
         "1.12.2" to mapOf("legacyforge" to "14.23.5.2847"),
-        "1.16.5" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.42.0+1.16", "forge" to "36.2.39"),
         "1.18.2" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.77.0+1.18.2", "forge" to "40.2.21"),
-        "1.19.4" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.87.0+1.19.4", "forge" to "45.2.0"),
         "1.20.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.92.7+1.20.1", "forge" to "47.4.18"),
-        "1.20.4" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.97.0+1.20.4", "neoforge" to "20.4.237"),
         "1.21.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.116.9+1.21.1", "neoforge" to "21.1.222"),
         "1.21.4" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.119.2+1.21.4", "neoforge" to "21.4.86"),
         "26.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.145.2+26.1.1", "neoforge" to "26.1.1.0-beta"),
@@ -145,39 +146,68 @@ object PrismProjectGenerator {
         root.resolve("build.gradle.kts").writeText(
             buildString {
                 appendLine("plugins {")
-                appendLine("    java")
-                if (config.enableKotlin) {
-                    appendLine("    kotlin(\"jvm\") version \"2.1.20\" apply false")
-                }
-                appendLine("    id(\"dev.deftu.gradle.multiversion-root\")")
+                appendLine("    id(\"dev.prism\")")
                 appendLine("}")
                 appendLine()
                 appendLine("group = \"${config.groupId}\"")
-                appendLine("version = property(\"mod_version\") as String")
+                appendLine("version = \"1.0.0\"")
                 appendLine()
-                appendLine("subprojects {")
-                appendLine("    apply(plugin = \"java\")")
-                if (config.enableKotlin) {
-                    appendLine("    apply(plugin = \"org.jetbrains.kotlin.jvm\")")
-                }
-                appendLine()
-                appendLine("    group = rootProject.group")
-                appendLine("    version = rootProject.version")
-                appendLine()
-                appendLine("    repositories {")
-                appendLine("        mavenCentral()")
-                appendLine("        maven(\"https://maven.fabricmc.net\")")
-                appendLine("        maven(\"https://maven.neoforged.net/releases\")")
-                appendLine("        maven(\"https://maven.minecraftforge.net\")")
-                val needsGtnh = config.versions.any { it.loaders.contains("legacyforge") }
-                if (needsGtnh) {
-                    appendLine("        maven(\"https://maven.gtnewhorizons.com\")")
-                }
+                appendLine("prism {")
+                appendLine("    metadata {")
+                appendLine("        modId = \"${config.modId}\"")
+                appendLine("        name = \"${config.modName}\"")
+                appendLine("        description = \"A Minecraft mod.\"")
+                appendLine("        license = \"${config.license}\"")
                 appendLine("    }")
                 appendLine()
-                appendLine("    java {")
-                appendLine("        toolchain.languageVersion.set(JavaLanguageVersion.of(21))")
-                appendLine("    }")
+
+                for (version in config.versions) {
+                    appendLine("    version(\"${version.mcVersion}\") {")
+
+                    if (config.enableKotlin) {
+                        appendLine("        kotlin()")
+                    }
+
+                    for (loader in version.loaders) {
+                        when (loader) {
+                            "fabric" -> {
+                                val fl = version.fabricLoaderVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("fabric") ?: "" }
+                                val fa = version.fabricApiVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("fabricApi") ?: "" }
+                                appendLine("        fabric {")
+                                appendLine("            loaderVersion = \"$fl\"")
+                                if (fa.isNotBlank()) {
+                                    appendLine("            fabricApi(\"$fa\")")
+                                }
+                                appendLine("        }")
+                            }
+                            "neoforge" -> {
+                                val nv = version.neoforgeVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("neoforge") ?: "" }
+                                appendLine("        neoforge {")
+                                appendLine("            loaderVersion = \"$nv\"")
+                                appendLine("            loaderVersionRange = \"[4,)\"")
+                                appendLine("        }")
+                            }
+                            "forge" -> {
+                                val fv = version.forgeVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("forge") ?: "" }
+                                appendLine("        forge {")
+                                appendLine("            loaderVersion = \"$fv\"")
+                                appendLine("            loaderVersionRange = \"[${fv.split(".").firstOrNull() ?: "47"},)\"")
+                                appendLine("        }")
+                            }
+                            "legacyforge" -> {
+                                val lfv = LOADER_VERSIONS[version.mcVersion]?.get("legacyforge") ?: ""
+                                appendLine("        legacyForge {")
+                                appendLine("            mcVersion = \"${version.mcVersion}\"")
+                                appendLine("            forgeVersion = \"$lfv\"")
+                                appendLine("        }")
+                            }
+                        }
+                    }
+
+                    appendLine("    }")
+                    appendLine()
+                }
+
                 appendLine("}")
             }
         )
