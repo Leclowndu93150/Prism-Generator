@@ -664,5 +664,4 @@ object PrismProjectGenerator {
 
     // Prism handles all subproject configuration from root.
     // No subproject build.gradle.kts files are generated.
-    }
 }
