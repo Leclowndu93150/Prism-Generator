@@ -124,7 +124,8 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         addVersionPanel()
 
         val scrollPane = JBScrollPane(versionListPanel)
-        scrollPane.preferredSize = JBUI.size(650, 280)
+        scrollPane.preferredSize = JBUI.size(650, 200)
+        scrollPane.minimumSize = JBUI.size(650, 150)
         scrollPane.border = JBUI.Borders.empty()
 
         val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT))
