@@ -1,0 +1,12 @@
+<idea-plugin>
+    <id>dev.prism.generator</id>
+    <name>Prism Project Generator</name>
+    <vendor url="https://github.com/Leclowndu93150">Leclowndu93150</vendor>
+    <description>Project generator for Prism multi-version Minecraft mod development.</description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <moduleBuilder id="PRISM_MODULE"
+                       builderClass="dev.prism.generator.PrismModuleBuilder"/>
+    </extensions>
+</idea-plugin>
