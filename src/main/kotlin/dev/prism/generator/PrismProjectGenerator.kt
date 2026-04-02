@@ -405,6 +405,47 @@ object PrismProjectGenerator {
             "forge" -> writeForgeModsToml(resourcesDir, config, version)
             "legacyforge" -> writeMcmodInfo(resourcesDir, config, version)
         }
+
+        if (loader != "legacyforge") {
+            writePackMcmeta(resourcesDir, config, version)
+        }
+    }
+
+    private fun writePackMcmeta(resourcesDir: File, config: PrismConfig, version: VersionConfig) {
+        val packFormat = getPackFormat(version.mcVersion)
+        resourcesDir.resolve("pack.mcmeta").writeText(
+            buildString {
+                appendLine("{")
+                appendLine("  \"pack\": {")
+                appendLine("    \"description\": \"${config.modName}\",")
+                appendLine("    \"pack_format\": $packFormat")
+                appendLine("  }")
+                appendLine("}")
+            }
+        )
+    }
+
+    private fun getPackFormat(mcVersion: String): Int {
+        val parts = mcVersion.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: 1
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+
+        return when {
+            major >= 26 -> 55
+            minor >= 21 && patch >= 4 -> 46
+            minor >= 21 && patch >= 1 -> 34
+            minor >= 21 -> 34
+            minor >= 20 && patch >= 4 -> 26
+            minor >= 20 && patch >= 2 -> 18
+            minor >= 20 -> 15
+            minor >= 19 && patch >= 4 -> 13
+            minor >= 19 -> 9
+            minor >= 18 -> 8
+            minor >= 17 -> 7
+            minor >= 16 && patch >= 2 -> 6
+            else -> 6
+        }
     }
 
     private fun writeFabricModJson(resourcesDir: File, config: PrismConfig, version: VersionConfig) {

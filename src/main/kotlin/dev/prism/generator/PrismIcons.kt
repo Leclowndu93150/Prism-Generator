@@ -1,9 +1,9 @@
 package dev.prism.generator
 
-import com.intellij.icons.AllIcons
+import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
 object PrismIcons {
     @JvmField
-    val PRISM: Icon = AllIcons.Nodes.Module
+    val PRISM: Icon = IconLoader.getIcon("/icons/prism_16.png", PrismIcons::class.java)
 }
