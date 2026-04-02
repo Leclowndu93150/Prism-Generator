@@ -257,41 +257,28 @@ object PrismProjectGenerator {
         val className = config.modId.split('_', '-').joinToString("") { it.replaceFirstChar { c -> c.uppercase() } }
 
         if (version.multiLoader) {
-            // -- Common module --
             val commonSrc = versionDir.resolve("common/src/main/java/$packagePath")
             commonSrc.mkdirs()
+            versionDir.resolve("common/src/main/resources").mkdirs()
             writeCommonModClass(commonSrc, config, className)
 
-            val commonBuild = versionDir.resolve("common")
-            writeSubprojectBuildGradle(commonBuild, config, version, "common")
-
-            // -- Each loader module --
             for (loader in version.loaders) {
                 val loaderDir = versionDir.resolve(loader)
-                loaderDir.mkdirs()
-
                 val loaderSrc = loaderDir.resolve("src/main/java/$packagePath")
                 loaderSrc.mkdirs()
                 writeLoaderEntryPoint(loaderSrc, config, version, loader, className)
                 writeMetadataFiles(loaderDir, config, version, loader)
                 writeMixinConfig(loaderDir, config, version)
                 writeAccessFile(loaderDir, loader)
-
-                writeSubprojectBuildGradle(loaderDir, config, version, loader)
             }
         } else {
             val loader = version.loaders.firstOrNull() ?: return
-            val loaderDir = versionDir.resolve(loader)
-            loaderDir.mkdirs()
-
-            val srcDir = loaderDir.resolve("src/main/java/$packagePath")
+            val srcDir = versionDir.resolve("src/main/java/$packagePath")
             srcDir.mkdirs()
             writeLoaderEntryPoint(srcDir, config, version, loader, className)
-            writeMetadataFiles(loaderDir, config, version, loader)
-            writeMixinConfig(loaderDir, config, version)
-            writeAccessFile(loaderDir, loader)
-
-            writeSubprojectBuildGradle(loaderDir, config, version, loader)
+            writeMetadataFiles(versionDir, config, version, loader)
+            writeMixinConfig(versionDir, config, version)
+            writeAccessFile(versionDir, loader)
         }
     }
 
@@ -675,77 +662,7 @@ object PrismProjectGenerator {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Sub-project build.gradle.kts
-    // -------------------------------------------------------------------------
-    private fun writeSubprojectBuildGradle(
-        moduleDir: File,
-        config: PrismConfig,
-        version: VersionConfig,
-        loaderOrCommon: String
-    ) {
-        moduleDir.resolve("build.gradle.kts").writeText(
-            buildString {
-                appendLine("plugins {")
-                appendLine("    java")
-                if (config.enableKotlin) {
-                    appendLine("    kotlin(\"jvm\")")
-                }
-                appendLine("}")
-                appendLine()
-                appendLine("// Prism version: ${version.mcVersion}, module: $loaderOrCommon")
-                appendLine("// Configure your loader-specific dependencies here.")
-                appendLine()
-                appendLine("group = rootProject.group")
-                appendLine("version = rootProject.version")
-                appendLine()
-
-                when (loaderOrCommon) {
-                    "common" -> {
-                        appendLine("// Common module: add shared dependencies here.")
-                        appendLine("dependencies {")
-                        appendLine("    // Add common dependencies")
-                        appendLine("}")
-                    }
-                    "fabric" -> {
-                        val loaderVer = LOADER_VERSIONS[version.mcVersion]
-                        appendLine("dependencies {")
-                        if (version.multiLoader) {
-                            appendLine("    implementation(project(\":versions:${version.mcVersion}:common\"))")
-                        }
-                        appendLine("    // Fabric Loader: ${loaderVer?.get("fabric") ?: "unknown"}")
-                        appendLine("    // Fabric API: ${loaderVer?.get("fabricApi") ?: "unknown"}")
-                        appendLine("}")
-                    }
-                    "neoforge" -> {
-                        val loaderVer = LOADER_VERSIONS[version.mcVersion]
-                        appendLine("dependencies {")
-                        if (version.multiLoader) {
-                            appendLine("    implementation(project(\":versions:${version.mcVersion}:common\"))")
-                        }
-                        appendLine("    // NeoForge: ${loaderVer?.get("neoforge") ?: "unknown"}")
-                        appendLine("}")
-                    }
-                    "forge" -> {
-                        val loaderVer = LOADER_VERSIONS[version.mcVersion]
-                        appendLine("dependencies {")
-                        if (version.multiLoader) {
-                            appendLine("    implementation(project(\":versions:${version.mcVersion}:common\"))")
-                        }
-                        appendLine("    // Forge: ${loaderVer?.get("forge") ?: "unknown"}")
-                        appendLine("}")
-                    }
-                    "legacyforge" -> {
-                        val loaderVer = LOADER_VERSIONS[version.mcVersion]
-                        appendLine("dependencies {")
-                        if (version.multiLoader) {
-                            appendLine("    implementation(project(\":versions:${version.mcVersion}:common\"))")
-                        }
-                        appendLine("    // Legacy Forge: ${loaderVer?.get("legacyforge") ?: "unknown"}")
-                        appendLine("}")
-                    }
-                }
-            }
-        )
+    // Prism handles all subproject configuration from root.
+    // No subproject build.gradle.kts files are generated.
     }
 }
