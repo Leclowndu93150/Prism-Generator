@@ -16,7 +16,9 @@ object PrismProjectGenerator {
         val license: String,
         val versions: List<VersionConfig>,
         val enableKotlin: Boolean,
-        val enableSharedCommon: Boolean
+        val enableSharedCommon: Boolean,
+        val enableMixins: Boolean,
+        val enableAccessFiles: Boolean,
     )
 
     data class VersionConfig(
@@ -27,17 +29,7 @@ object PrismProjectGenerator {
         val fabricApiVersion: String = "",
         val neoforgeVersion: String = "",
         val forgeVersion: String = "",
-    )
-
-    // Loader / API versions per Minecraft version
-    private val LOADER_VERSIONS: Map<String, Map<String, String>> = mapOf(
-        "1.7.10" to mapOf("legacyforge" to "10.13.4.1614"),
-        "1.12.2" to mapOf("legacyforge" to "14.23.5.2847"),
-        "1.18.2" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.77.0+1.18.2", "forge" to "40.2.21"),
-        "1.20.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.92.7+1.20.1", "forge" to "47.4.18"),
-        "1.21.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.116.9+1.21.1", "neoforge" to "21.1.222"),
-        "1.21.4" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.119.2+1.21.4", "neoforge" to "21.4.86"),
-        "26.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.145.2+26.1.1", "neoforge" to "26.1.1.0-beta"),
+        val legacyForgeVersion: String = "",
     )
 
     fun generate(config: PrismConfig) {
@@ -49,6 +41,9 @@ object PrismProjectGenerator {
         writeSettingsGradle(root, config)
         writeBuildGradle(root, config)
         writeGradleWrapper(root)
+        if (config.enableSharedCommon) {
+            generateSharedCommonDir(root, config)
+        }
 
         for (version in config.versions) {
             generateVersionDir(root, config, version)
@@ -183,10 +178,11 @@ object PrismProjectGenerator {
                     }
 
                     for (loader in version.loaders) {
+                        val defaults = PrismVersionCatalog.fallbackCatalog().defaults[version.mcVersion]
                         when (loader) {
                             "fabric" -> {
-                                val fl = version.fabricLoaderVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("fabric") ?: "" }
-                                val fa = version.fabricApiVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("fabricApi") ?: "" }
+                                val fl = version.fabricLoaderVersion.ifBlank { defaults?.fabricLoaderVersion.orEmpty() }
+                                val fa = version.fabricApiVersion.ifBlank { defaults?.fabricApiVersion.orEmpty() }
                                 appendLine("        fabric {")
                                 appendLine("            loaderVersion = \"$fl\"")
                                 if (fa.isNotBlank()) {
@@ -195,21 +191,21 @@ object PrismProjectGenerator {
                                 appendLine("        }")
                             }
                             "neoforge" -> {
-                                val nv = version.neoforgeVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("neoforge") ?: "" }
+                                val nv = version.neoforgeVersion.ifBlank { defaults?.neoforgeVersion.orEmpty() }
                                 appendLine("        neoforge {")
                                 appendLine("            loaderVersion = \"$nv\"")
                                 appendLine("            loaderVersionRange = \"[4,)\"")
                                 appendLine("        }")
                             }
                             "forge" -> {
-                                val fv = version.forgeVersion.ifBlank { LOADER_VERSIONS[version.mcVersion]?.get("forge") ?: "" }
+                                val fv = version.forgeVersion.ifBlank { defaults?.forgeVersion.orEmpty() }
                                 appendLine("        forge {")
                                 appendLine("            loaderVersion = \"$fv\"")
                                 appendLine("            loaderVersionRange = \"[${fv.split(".").firstOrNull() ?: "47"},)\"")
                                 appendLine("        }")
                             }
                             "legacyforge" -> {
-                                val lfv = LOADER_VERSIONS[version.mcVersion]?.get("legacyforge") ?: ""
+                                val lfv = version.legacyForgeVersion.ifBlank { defaults?.legacyForgeVersion.orEmpty() }
                                 appendLine("        legacyForge {")
                                 appendLine("            mcVersion = \"${version.mcVersion}\"")
                                 appendLine("            forgeVersion = \"$lfv\"")
@@ -228,7 +224,7 @@ object PrismProjectGenerator {
     }
 
     // -------------------------------------------------------------------------
-    // Gradle wrapper (minimal, just properties)
+    // Gradle wrapper
     // -------------------------------------------------------------------------
     private fun writeGradleWrapper(root: File) {
         val wrapperDir = root.resolve("gradle/wrapper")
@@ -244,6 +240,30 @@ object PrismProjectGenerator {
                 appendLine("zipStorePath=wrapper/dists")
             }
         )
+
+        copyBundledResource("/gradle-wrapper/gradlew", root.resolve("gradlew"))
+        copyBundledResource("/gradle-wrapper/gradlew.bat", root.resolve("gradlew.bat"))
+        copyBundledResource("/gradle-wrapper/gradle-wrapper.jar", wrapperDir.resolve("gradle-wrapper.jar"))
+
+        root.resolve("gradlew").setExecutable(true, false)
+    }
+
+    private fun copyBundledResource(resourcePath: String, target: File) {
+        val resourceStream = PrismProjectGenerator::class.java.getResourceAsStream(resourcePath)
+            ?: error("Missing bundled resource: $resourcePath")
+
+        target.parentFile?.mkdirs()
+        resourceStream.use { input ->
+            target.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+    }
+
+    private fun generateSharedCommonDir(root: File, config: PrismConfig) {
+        val packagePath = config.groupId.replace('.', '/') + "/" + config.modId
+        root.resolve("common/src/main/java/$packagePath").mkdirs()
+        root.resolve("common/src/main/resources").mkdirs()
     }
 
     // -------------------------------------------------------------------------
@@ -268,8 +288,12 @@ object PrismProjectGenerator {
                 loaderSrc.mkdirs()
                 writeLoaderEntryPoint(loaderSrc, config, version, loader, className)
                 writeMetadataFiles(loaderDir, config, version, loader)
-                writeMixinConfig(loaderDir, config, version)
-                writeAccessFile(loaderDir, loader)
+                if (config.enableMixins) {
+                    writeMixinConfig(loaderDir, config)
+                }
+                if (config.enableAccessFiles) {
+                    writeAccessFile(loaderDir, loader, config.modId)
+                }
             }
         } else {
             val loader = version.loaders.firstOrNull() ?: return
@@ -277,8 +301,12 @@ object PrismProjectGenerator {
             srcDir.mkdirs()
             writeLoaderEntryPoint(srcDir, config, version, loader, className)
             writeMetadataFiles(versionDir, config, version, loader)
-            writeMixinConfig(versionDir, config, version)
-            writeAccessFile(versionDir, loader)
+            if (config.enableMixins) {
+                writeMixinConfig(versionDir, config)
+            }
+            if (config.enableAccessFiles) {
+                writeAccessFile(versionDir, loader, config.modId)
+            }
         }
     }
 
@@ -396,12 +424,14 @@ object PrismProjectGenerator {
     private fun writeLegacyForgeEntryPoint(dir: File, config: PrismConfig, version: VersionConfig, className: String) {
         val entryName = "${className}LegacyForge"
         if (version.mcVersion == "1.7.10" || version.mcVersion == "1.12.2") {
+            val modPackage = if (version.mcVersion == "1.7.10") "cpw.mods.fml.common" else "net.minecraftforge.fml.common"
+            val eventPackage = if (version.mcVersion == "1.7.10") "cpw.mods.fml.common.event" else "net.minecraftforge.fml.common.event"
             dir.resolve("$entryName.java").writeText(
                 buildString {
                     appendLine("package ${config.groupId}.${config.modId};")
                     appendLine()
-                    appendLine("import net.minecraftforge.fml.common.Mod;")
-                    appendLine("import net.minecraftforge.fml.common.event.FMLInitializationEvent;")
+                    appendLine("import $modPackage.Mod;")
+                    appendLine("import $eventPackage.FMLInitializationEvent;")
                     appendLine()
                     appendLine("@Mod(modid = \"${config.modId}\", name = \"${config.modName}\", version = \"1.0.0\")")
                     appendLine("public class $entryName {")
@@ -482,28 +512,41 @@ object PrismProjectGenerator {
     private fun writeFabricModJson(resourcesDir: File, config: PrismConfig, version: VersionConfig) {
         val className = config.modId.split('_', '-').joinToString("") { it.replaceFirstChar { c -> c.uppercase() } }
         val entryClass = "${config.groupId}.${config.modId}.${className}Fabric"
+        val modId = placeholder("mod_id")
+        val versionPlaceholder = placeholder("version")
+        val modName = placeholder("mod_name")
+        val description = placeholder("description")
+        val license = placeholder("license")
+        val fabricLoaderVersion = placeholder("fabric_loader_version")
+        val minecraftVersion = placeholder("minecraft_version")
+        val javaVersion = placeholder("java_version")
 
         resourcesDir.resolve("fabric.mod.json").writeText(
             buildString {
                 appendLine("{")
                 appendLine("  \"schemaVersion\": 1,")
-                appendLine("  \"id\": \"${config.modId}\",")
-                appendLine("  \"version\": \"\${version}\",")
-                appendLine("  \"name\": \"${config.modName}\",")
-                appendLine("  \"description\": \"A Prism multi-version mod.\",")
-                appendLine("  \"license\": \"${config.license}\",")
+                appendLine("  \"id\": \"$modId\",")
+                appendLine("  \"version\": \"$versionPlaceholder\",")
+                appendLine("  \"name\": \"$modName\",")
+                appendLine("  \"description\": \"$description\",")
+                appendLine("  \"license\": \"$license\",")
                 appendLine("  \"entrypoints\": {")
                 appendLine("    \"main\": [")
                 appendLine("      \"$entryClass\"")
                 appendLine("    ]")
                 appendLine("  },")
-                appendLine("  \"mixins\": [")
-                appendLine("    \"${config.modId}.mixins.json\"")
-                appendLine("  ],")
+                if (config.enableAccessFiles) {
+                    appendLine("  \"accessWidener\": \"$modId.accesswidener\",")
+                }
+                if (config.enableMixins) {
+                    appendLine("  \"mixins\": [")
+                    appendLine("    \"$modId.mixins.json\"")
+                    appendLine("  ],")
+                }
                 appendLine("  \"depends\": {")
-                appendLine("    \"fabricloader\": \">=0.15.0\",")
-                appendLine("    \"minecraft\": \"${version.mcVersion}\",")
-                appendLine("    \"java\": \">=17\"")
+                appendLine("    \"fabricloader\": \">=$fabricLoaderVersion\",")
+                appendLine("    \"minecraft\": \"$minecraftVersion\",")
+                appendLine("    \"java\": \">=$javaVersion\"")
                 appendLine("  }")
                 appendLine("}")
             }
@@ -517,31 +560,33 @@ object PrismProjectGenerator {
         metaDir.resolve("neoforge.mods.toml").writeText(
             buildString {
                 appendLine("modLoader = \"javafml\"")
-                appendLine("loaderVersion = \"[1,)\"")
-                appendLine("license = \"${config.license}\"")
+                appendLine("loaderVersion = \"${placeholder("neoforge_loader_version_range")}\"")
+                appendLine("license = \"${placeholder("license")}\"")
                 appendLine()
                 appendLine("[[mods]]")
-                appendLine("modId = \"${config.modId}\"")
-                appendLine("version = \"\${version}\"")
-                appendLine("displayName = \"${config.modName}\"")
-                appendLine("description = \"A Prism multi-version mod.\"")
+                appendLine("modId = \"${placeholder("mod_id")}\"")
+                appendLine("version = \"${placeholder("version")}\"")
+                appendLine("displayName = \"${placeholder("mod_name")}\"")
+                appendLine("description = \"${placeholder("description")}\"")
                 appendLine()
-                appendLine("[[dependencies.${config.modId}]]")
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
                 appendLine("modId = \"neoforge\"")
                 appendLine("type = \"required\"")
-                appendLine("versionRange = \"[${LOADER_VERSIONS[version.mcVersion]?.get("neoforge") ?: "1.0"},)\"")
+                appendLine("versionRange = \"[${placeholder("neoforge_version")},)\"")
                 appendLine("ordering = \"NONE\"")
                 appendLine("side = \"BOTH\"")
                 appendLine()
-                appendLine("[[dependencies.${config.modId}]]")
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
                 appendLine("modId = \"minecraft\"")
                 appendLine("type = \"required\"")
-                appendLine("versionRange = \"[${version.mcVersion},)\"")
+                appendLine("versionRange = \"[${placeholder("minecraft_version")},)\"")
                 appendLine("ordering = \"NONE\"")
                 appendLine("side = \"BOTH\"")
-                appendLine()
-                appendLine("[[mixins]]")
-                appendLine("config = \"${config.modId}.mixins.json\"")
+                if (config.enableMixins) {
+                    appendLine()
+                    appendLine("[[mixins]]")
+                    appendLine("config = \"${placeholder("mod_id")}.mixins.json\"")
+                }
             }
         )
     }
@@ -553,31 +598,33 @@ object PrismProjectGenerator {
         metaDir.resolve("mods.toml").writeText(
             buildString {
                 appendLine("modLoader = \"javafml\"")
-                appendLine("loaderVersion = \"[1,)\"")
-                appendLine("license = \"${config.license}\"")
+                appendLine("loaderVersion = \"${placeholder("forge_loader_version_range")}\"")
+                appendLine("license = \"${placeholder("license")}\"")
                 appendLine()
                 appendLine("[[mods]]")
-                appendLine("modId = \"${config.modId}\"")
-                appendLine("version = \"\${version}\"")
-                appendLine("displayName = \"${config.modName}\"")
-                appendLine("description = \"A Prism multi-version mod.\"")
+                appendLine("modId = \"${placeholder("mod_id")}\"")
+                appendLine("version = \"${placeholder("version")}\"")
+                appendLine("displayName = \"${placeholder("mod_name")}\"")
+                appendLine("description = \"${placeholder("description")}\"")
                 appendLine()
-                appendLine("[[dependencies.${config.modId}]]")
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
                 appendLine("modId = \"forge\"")
                 appendLine("mandatory = true")
-                appendLine("versionRange = \"[${LOADER_VERSIONS[version.mcVersion]?.get("forge") ?: "1.0"},)\"")
+                appendLine("versionRange = \"[${placeholder("forge_version")},)\"")
                 appendLine("ordering = \"NONE\"")
                 appendLine("side = \"BOTH\"")
                 appendLine()
-                appendLine("[[dependencies.${config.modId}]]")
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
                 appendLine("modId = \"minecraft\"")
                 appendLine("mandatory = true")
-                appendLine("versionRange = \"[${version.mcVersion},)\"")
+                appendLine("versionRange = \"[${placeholder("minecraft_version")},)\"")
                 appendLine("ordering = \"NONE\"")
                 appendLine("side = \"BOTH\"")
-                appendLine()
-                appendLine("[[mixins]]")
-                appendLine("config = \"${config.modId}.mixins.json\"")
+                if (config.enableMixins) {
+                    appendLine()
+                    appendLine("[[mixins]]")
+                    appendLine("config = \"${placeholder("mod_id")}.mixins.json\"")
+                }
             }
         )
     }
@@ -604,17 +651,9 @@ object PrismProjectGenerator {
     // -------------------------------------------------------------------------
     // Mixin config
     // -------------------------------------------------------------------------
-    private fun writeMixinConfig(loaderDir: File, config: PrismConfig, version: VersionConfig) {
+    private fun writeMixinConfig(loaderDir: File, config: PrismConfig) {
         val resourcesDir = loaderDir.resolve("src/main/resources")
         resourcesDir.mkdirs()
-
-        val javaVersion = when {
-            version.mcVersion == "1.7.10" -> 8
-            version.mcVersion == "1.12.2" -> 8
-            version.mcVersion == "1.16.5" -> 16
-            version.mcVersion.startsWith("1.18") || version.mcVersion.startsWith("1.19") -> 17
-            else -> 21
-        }
 
         resourcesDir.resolve("${config.modId}.mixins.json").writeText(
             buildString {
@@ -622,7 +661,7 @@ object PrismProjectGenerator {
                 appendLine("  \"required\": true,")
                 appendLine("  \"minVersion\": \"0.8\",")
                 appendLine("  \"package\": \"${config.groupId}.${config.modId}.mixin\",")
-                appendLine("  \"compatibilityLevel\": \"JAVA_$javaVersion\",")
+                appendLine("  \"compatibilityLevel\": \"JAVA_${placeholder("java_version")}\",")
                 appendLine("  \"mixins\": [],")
                 appendLine("  \"client\": [],")
                 appendLine("  \"server\": [],")
@@ -637,13 +676,13 @@ object PrismProjectGenerator {
     // -------------------------------------------------------------------------
     // Access widener / Access transformer
     // -------------------------------------------------------------------------
-    private fun writeAccessFile(loaderDir: File, loader: String) {
+    private fun writeAccessFile(loaderDir: File, loader: String, modId: String) {
         val resourcesDir = loaderDir.resolve("src/main/resources")
         resourcesDir.mkdirs()
 
         when (loader) {
             "fabric" -> {
-                resourcesDir.resolve("mod.accesswidener").writeText(
+                resourcesDir.resolve("$modId.accesswidener").writeText(
                     "accessWidener\tv2\tnamed\n"
                 )
             }
@@ -655,12 +694,16 @@ object PrismProjectGenerator {
                 )
             }
             "legacyforge" -> {
-                resourcesDir.resolve("accesstransformer.cfg").writeText(
+                val metaDir = resourcesDir.resolve("META-INF")
+                metaDir.mkdirs()
+                metaDir.resolve("accesstransformer.cfg").writeText(
                     "# Access Transformer file\n"
                 )
             }
         }
     }
+
+    private fun placeholder(name: String): String = "${'$'}{$name}"
 
     // Prism handles all subproject configuration from root.
     // No subproject build.gradle.kts files are generated.

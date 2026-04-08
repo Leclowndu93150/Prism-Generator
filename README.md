@@ -7,11 +7,12 @@ IntelliJ IDEA plugin that adds a "Prism Mod" option to the New Project wizard. G
 Pick your Minecraft versions, choose loaders (Fabric, NeoForge, Forge, Legacy Forge), and the plugin generates the full project structure with:
 
 - `settings.gradle.kts` and `build.gradle.kts` with Prism DSL
+- Latest Minecraft and loader defaults fetched online when available, with offline fallbacks
 - Source directories for each version and loader
 - Entry point classes (ModInitializer, @Mod, etc.)
-- Metadata files (fabric.mod.json, neoforge.mods.toml, etc.)
-- Empty mixin configs and access widener/transformer files
-- Gradle wrapper and .gitignore
+- Metadata files aligned with Prism template expansion (`fabric.mod.json`, `neoforge.mods.toml`, etc.)
+- Optional mixin and access widener / access transformer scaffolds
+- Full Gradle wrapper (`gradlew`, `gradlew.bat`, and `gradle-wrapper.jar`) and `.gitignore`
 
 ## Install
 

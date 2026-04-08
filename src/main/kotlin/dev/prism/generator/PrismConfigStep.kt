@@ -16,20 +16,25 @@ import javax.swing.*
 class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
 
     private val props = PropertiesComponent.getInstance()
+    private var versionCatalog = PrismVersionCatalog.fallbackCatalog()
 
     var modId: String = ""
     var modName: String = ""
     var groupId: String = props.getValue("prism.lastGroupId", "com.example")
     var license: String? = props.getValue("prism.lastLicense", "MIT")
-    val versionEntries: MutableList<VersionEntry> = mutableListOf(VersionEntry())
+    val versionEntries: MutableList<VersionEntry> = mutableListOf(
+        VersionEntry(mcVersion = PrismVersionCatalog.defaultMinecraftVersion())
+    )
     var enableKotlin: Boolean = false
     var enableSharedCommon: Boolean = false
+    var enableMixins: Boolean = false
+    var enableAccessFiles: Boolean = false
 
     private lateinit var versionListPanel: JPanel
     private val versionPanels: MutableList<VersionEntryPanel> = mutableListOf()
 
     data class VersionEntry(
-        var mcVersion: String = "1.21.1",
+        var mcVersion: String = PrismVersionCatalog.defaultMinecraftVersion(),
         var mode: String = "Single Loader",
         var singleLoader: String = "NeoForge",
         var fabric: Boolean = false,
@@ -40,32 +45,12 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         var fabricApiVersion: String = "",
         var neoforgeVersion: String = "",
         var forgeVersion: String = "",
+        var legacyForgeVersion: String = "",
     )
 
     companion object {
-        val MC_VERSIONS = arrayOf("1.7.10", "1.12.2", "1.18.2", "1.20.1", "1.21.1", "1.21.4", "26.1")
         val LICENSES = arrayOf("MIT", "GPL-3.0", "Apache-2.0", "All Rights Reserved")
         val MODES = arrayOf("Single Loader", "Multi Loader")
-
-        val VALID_LOADERS: Map<String, List<String>> = mapOf(
-            "1.7.10" to listOf("Legacy Forge"),
-            "1.12.2" to listOf("Legacy Forge"),
-            "1.18.2" to listOf("Fabric", "Forge"),
-            "1.20.1" to listOf("Fabric", "Forge"),
-            "1.21.1" to listOf("Fabric", "NeoForge"),
-            "1.21.4" to listOf("Fabric", "NeoForge"),
-            "26.1" to listOf("Fabric", "NeoForge"),
-        )
-
-        val DEFAULT_VERSIONS: Map<String, Map<String, String>> = mapOf(
-            "1.7.10" to mapOf("legacyforge" to "10.13.4.1614"),
-            "1.12.2" to mapOf("legacyforge" to "14.23.5.2847"),
-            "1.18.2" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.77.0+1.18.2", "forge" to "40.2.21"),
-            "1.20.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.92.7+1.20.1", "forge" to "47.4.18"),
-            "1.21.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.116.9+1.21.1", "neoforge" to "21.1.222"),
-            "1.21.4" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.119.2+1.21.4", "neoforge" to "21.4.86"),
-            "26.1" to mapOf("fabric" to "0.18.6", "fabricApi" to "0.145.2+26.1.1", "neoforge" to "26.1.1.0-beta"),
-        )
 
         fun loaderKey(display: String): String = when (display) {
             "Fabric" -> "fabric"
@@ -126,7 +111,14 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             group("Options") {
                 row { checkBox("Enable Kotlin").bindSelected(::enableKotlin) }
                 row { checkBox("Enable shared common module").bindSelected(::enableSharedCommon) }
+                row { checkBox("Generate mixin scaffold").bindSelected(::enableMixins) }
+                row { checkBox("Generate access widener / transformer scaffold").bindSelected(::enableAccessFiles) }
             }
+        }
+
+        PrismVersionCatalog.loadCatalogAsync { catalog ->
+            versionCatalog = catalog
+            versionPanels.forEach { it.applyCatalog() }
         }
     }
 
@@ -181,7 +173,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
     inner class VersionEntryPanel(val entry: VersionEntry, index: Int) {
         val panel: JPanel = JPanel()
 
-        private val mcVersionCombo = ComboBox(MC_VERSIONS)
+        private val mcVersionCombo = ComboBox(versionCatalog.minecraftVersions.toTypedArray())
         private val modeCombo = ComboBox(MODES)
         private val singleLoaderCombo = ComboBox(arrayOf<String>())
 
@@ -270,20 +262,24 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         }
 
         private fun fillDefaults() {
-            val defaults = DEFAULT_VERSIONS[entry.mcVersion] ?: return
-            fabricLoaderField.text = defaults["fabric"] ?: ""
-            fabricApiField.text = defaults["fabricApi"] ?: ""
-            neoforgeVersionField.text = defaults["neoforge"] ?: ""
-            forgeVersionField.text = defaults["forge"] ?: ""
-            legacyForgeVersionField.text = defaults["legacyforge"] ?: ""
+            val defaults = versionCatalog.defaults[entry.mcVersion] ?: PrismVersionCatalog.LoaderDefaults()
+            fabricLoaderField.text = defaults.fabricLoaderVersion
+            fabricApiField.text = defaults.fabricApiVersion
+            neoforgeVersionField.text = defaults.neoforgeVersion
+            forgeVersionField.text = defaults.forgeVersion
+            legacyForgeVersionField.text = defaults.legacyForgeVersion
         }
 
         private fun updateLoadersForVersion() {
-            val valid = VALID_LOADERS[entry.mcVersion] ?: listOf("NeoForge")
+            val valid = PrismVersionCatalog.validLoadersFor(entry.mcVersion)
+            val previousSingleLoader = entry.singleLoader
 
             singleLoaderCombo.removeAllItems()
             for (l in valid) singleLoaderCombo.addItem(l)
-            if (valid.isNotEmpty()) {
+            if (valid.contains(previousSingleLoader)) {
+                singleLoaderCombo.selectedItem = previousSingleLoader
+                entry.singleLoader = previousSingleLoader
+            } else if (valid.isNotEmpty()) {
                 singleLoaderCombo.selectedIndex = 0
                 entry.singleLoader = valid[0]
             }
@@ -305,6 +301,8 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             } else {
                 modeCombo.isEnabled = true
             }
+
+            ensureAtLeastOneLoaderSelected(valid)
         }
 
         private fun updateLoaderVisibility() {
@@ -313,19 +311,29 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             multiLoaderPanel.isVisible = isMulti
         }
 
+        private fun ensureAtLeastOneLoaderSelected(valid: List<String>) {
+            if (entry.mode != "Multi Loader") {
+                return
+            }
+            if (fabricCheck.isSelected || neoforgeCheck.isSelected || forgeCheck.isSelected || legacyForgeCheck.isSelected) {
+                return
+            }
+            when (valid.firstOrNull()) {
+                "Fabric" -> fabricCheck.isSelected = true
+                "NeoForge" -> neoforgeCheck.isSelected = true
+                "Forge" -> forgeCheck.isSelected = true
+                "Legacy Forge" -> legacyForgeCheck.isSelected = true
+            }
+            entry.fabric = fabricCheck.isSelected
+            entry.neoforge = neoforgeCheck.isSelected
+            entry.forge = forgeCheck.isSelected
+            entry.legacyForge = legacyForgeCheck.isSelected
+        }
+
         private fun updateVersionFields() {
             versionFieldsPanel.removeAll()
 
-            val activeLoaders = if (entry.mode == "Multi Loader") {
-                buildList {
-                    if (entry.fabric) add("fabric")
-                    if (entry.neoforge) add("neoforge")
-                    if (entry.forge) add("forge")
-                    if (entry.legacyForge) add("legacyforge")
-                }
-            } else {
-                listOf(loaderKey(entry.singleLoader))
-            }
+            val activeLoaders = activeLoadersForEntry()
 
             for (loader in activeLoaders) {
                 when (loader) {
@@ -361,6 +369,42 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             }
         }
 
+        private fun activeLoadersForEntry(): List<String> {
+            if (entry.mode != "Multi Loader") {
+                return listOf(loaderKey(entry.singleLoader))
+            }
+
+            val loaders = buildList {
+                if (entry.fabric) add("fabric")
+                if (entry.neoforge) add("neoforge")
+                if (entry.forge) add("forge")
+                if (entry.legacyForge) add("legacyforge")
+            }
+            if (loaders.isNotEmpty()) {
+                return loaders
+            }
+
+            val fallback = PrismVersionCatalog.validLoadersFor(entry.mcVersion).firstOrNull() ?: "Fabric"
+            return listOf(loaderKey(fallback))
+        }
+
+        fun applyCatalog() {
+            val currentSelection = entry.mcVersion
+            mcVersionCombo.model = DefaultComboBoxModel(versionCatalog.minecraftVersions.toTypedArray())
+            val resolvedSelection = if (versionCatalog.minecraftVersions.contains(currentSelection)) {
+                currentSelection
+            } else {
+                versionCatalog.minecraftVersions.firstOrNull().orEmpty()
+            }
+            mcVersionCombo.selectedItem = resolvedSelection
+            entry.mcVersion = resolvedSelection
+            updateLoadersForVersion()
+            fillDefaults()
+            updateVersionFields()
+            panel.revalidate()
+            panel.repaint()
+        }
+
         fun syncToEntry() {
             entry.mcVersion = mcVersionCombo.selectedItem as String
             entry.mode = modeCombo.selectedItem as String
@@ -373,6 +417,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             entry.fabricApiVersion = fabricApiField.text
             entry.neoforgeVersion = neoforgeVersionField.text
             entry.forgeVersion = forgeVersionField.text
+            entry.legacyForgeVersion = legacyForgeVersionField.text
         }
     }
 
@@ -390,7 +435,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         if (modName.isBlank()) modName = deriveModName(projectName)
 
         val config = PrismProjectGenerator.PrismConfig(
-            projectPath = "$projectPath/$projectName",
+            projectPath = projectPath,
             projectName = projectName,
             modId = modId,
             modName = modName,
@@ -403,6 +448,8 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                         if (entry.neoforge) add("neoforge")
                         if (entry.forge) add("forge")
                         if (entry.legacyForge) add("legacyforge")
+                    }.ifEmpty {
+                        listOf(loaderKey(PrismVersionCatalog.validLoadersFor(entry.mcVersion).firstOrNull() ?: "Fabric"))
                     }
                 } else {
                     listOf(loaderKey(entry.singleLoader))
@@ -415,10 +462,13 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                     fabricApiVersion = entry.fabricApiVersion,
                     neoforgeVersion = entry.neoforgeVersion,
                     forgeVersion = entry.forgeVersion,
+                    legacyForgeVersion = entry.legacyForgeVersion,
                 )
             },
             enableKotlin = enableKotlin,
-            enableSharedCommon = enableSharedCommon
+            enableSharedCommon = enableSharedCommon,
+            enableMixins = enableMixins,
+            enableAccessFiles = enableAccessFiles,
         )
 
         PrismProjectGenerator.generate(config)
