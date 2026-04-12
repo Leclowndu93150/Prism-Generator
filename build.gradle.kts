@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.prism"
-version = "1.1.0"
+version = "1.2.1"
 
 repositories {
     mavenCentral()
@@ -20,6 +20,7 @@ dependencies {
         intellijIdeaCommunity("2024.3")
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
+        bundledPlugin("Git4Idea")
         instrumentationTools()
     }
 }

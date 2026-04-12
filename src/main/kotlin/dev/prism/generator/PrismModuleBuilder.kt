@@ -19,10 +19,23 @@ class PrismModuleBuilder : AbstractNewProjectWizardBuilder() {
     override fun getGroupName(): String = "Minecraft"
 
     override fun createStep(context: WizardContext): NewProjectWizardStep {
+        var baseStep: NewProjectWizardBaseStep? = null
+        val providers = mutableListOf<(NewProjectWizardStep) -> NewProjectWizardStep>(
+            { parent ->
+                val step = NewProjectWizardBaseStep(parent)
+                baseStep = step
+                step
+            },
+            ::PrismConfigStep,
+        )
+        try {
+            Class.forName("com.intellij.ide.wizard.GitNewProjectWizardStep")
+            providers.add { _ ->
+                com.intellij.ide.wizard.GitNewProjectWizardStep(baseStep!!)
+            }
+        } catch (_: ClassNotFoundException) {
+        }
         return RootNewProjectWizardStep(context)
-            .chain(
-                ::NewProjectWizardBaseStep,
-                ::PrismConfigStep
-            )
+            .chain(*providers.toTypedArray())
     }
 }

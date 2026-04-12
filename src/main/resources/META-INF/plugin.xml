@@ -5,6 +5,7 @@
     <description>Project generator for Prism multi-version Minecraft mod development.</description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+    <depends optional="true" config-file="git-integration.xml">Git4Idea</depends>
     <extensions defaultExtensionNs="com.intellij">
         <moduleBuilder id="PRISM_MODULE"
                        builderClass="dev.prism.generator.PrismModuleBuilder"/>
