@@ -40,11 +40,13 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         var fabric: Boolean = false,
         var neoforge: Boolean = false,
         var forge: Boolean = false,
+        var lexForge: Boolean = false,
         var legacyForge: Boolean = false,
         var fabricLoaderVersion: String = "",
         var fabricApiVersion: String = "",
         var neoforgeVersion: String = "",
         var forgeVersion: String = "",
+        var lexForgeVersion: String = "",
         var legacyForgeVersion: String = "",
     )
 
@@ -56,6 +58,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             "Fabric" -> "fabric"
             "NeoForge" -> "neoforge"
             "Forge" -> "forge"
+            "LexForge" -> "lexforge"
             "Legacy Forge" -> "legacyforge"
             else -> "neoforge"
         }
@@ -180,12 +183,14 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         private val fabricCheck = JCheckBox("Fabric")
         private val neoforgeCheck = JCheckBox("NeoForge")
         private val forgeCheck = JCheckBox("Forge")
+        private val lexForgeCheck = JCheckBox("LexForge")
         private val legacyForgeCheck = JCheckBox("Legacy Forge")
 
         private val fabricLoaderField = JTextField(12)
         private val fabricApiField = JTextField(14)
         private val neoforgeVersionField = JTextField(12)
         private val forgeVersionField = JTextField(12)
+        private val lexForgeVersionField = JTextField(12)
         private val legacyForgeVersionField = JTextField(12)
 
         private val singleLoaderPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0))
@@ -214,11 +219,13 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             fabricCheck.isSelected = entry.fabric
             neoforgeCheck.isSelected = entry.neoforge
             forgeCheck.isSelected = entry.forge
+            lexForgeCheck.isSelected = entry.lexForge
             legacyForgeCheck.isSelected = entry.legacyForge
             multiLoaderPanel.add(JLabel("Loaders:"))
             multiLoaderPanel.add(fabricCheck)
             multiLoaderPanel.add(neoforgeCheck)
             multiLoaderPanel.add(forgeCheck)
+            multiLoaderPanel.add(lexForgeCheck)
             multiLoaderPanel.add(legacyForgeCheck)
 
             panel.add(singleLoaderPanel)
@@ -256,6 +263,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             fabricCheck.addActionListener { entry.fabric = fabricCheck.isSelected; updateVersionFields(); panel.revalidate() }
             neoforgeCheck.addActionListener { entry.neoforge = neoforgeCheck.isSelected; updateVersionFields(); panel.revalidate() }
             forgeCheck.addActionListener { entry.forge = forgeCheck.isSelected; updateVersionFields(); panel.revalidate() }
+            lexForgeCheck.addActionListener { entry.lexForge = lexForgeCheck.isSelected; updateVersionFields(); panel.revalidate() }
             legacyForgeCheck.addActionListener { entry.legacyForge = legacyForgeCheck.isSelected; updateVersionFields(); panel.revalidate() }
 
             fillDefaults()
@@ -267,6 +275,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             fabricApiField.text = defaults.fabricApiVersion
             neoforgeVersionField.text = defaults.neoforgeVersion
             forgeVersionField.text = defaults.forgeVersion
+            lexForgeVersionField.text = defaults.lexForgeVersion
             legacyForgeVersionField.text = defaults.legacyForgeVersion
         }
 
@@ -287,11 +296,13 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             fabricCheck.isEnabled = "Fabric" in valid
             neoforgeCheck.isEnabled = "NeoForge" in valid
             forgeCheck.isEnabled = "Forge" in valid
+            lexForgeCheck.isEnabled = "LexForge" in valid
             legacyForgeCheck.isEnabled = "Legacy Forge" in valid
 
             if (!fabricCheck.isEnabled) { fabricCheck.isSelected = false; entry.fabric = false }
             if (!neoforgeCheck.isEnabled) { neoforgeCheck.isSelected = false; entry.neoforge = false }
             if (!forgeCheck.isEnabled) { forgeCheck.isSelected = false; entry.forge = false }
+            if (!lexForgeCheck.isEnabled) { lexForgeCheck.isSelected = false; entry.lexForge = false }
             if (!legacyForgeCheck.isEnabled) { legacyForgeCheck.isSelected = false; entry.legacyForge = false }
 
             if (valid.size <= 1) {
@@ -315,18 +326,20 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             if (entry.mode != "Multi Loader") {
                 return
             }
-            if (fabricCheck.isSelected || neoforgeCheck.isSelected || forgeCheck.isSelected || legacyForgeCheck.isSelected) {
+            if (fabricCheck.isSelected || neoforgeCheck.isSelected || forgeCheck.isSelected || lexForgeCheck.isSelected || legacyForgeCheck.isSelected) {
                 return
             }
             when (valid.firstOrNull()) {
                 "Fabric" -> fabricCheck.isSelected = true
                 "NeoForge" -> neoforgeCheck.isSelected = true
                 "Forge" -> forgeCheck.isSelected = true
+                "LexForge" -> lexForgeCheck.isSelected = true
                 "Legacy Forge" -> legacyForgeCheck.isSelected = true
             }
             entry.fabric = fabricCheck.isSelected
             entry.neoforge = neoforgeCheck.isSelected
             entry.forge = forgeCheck.isSelected
+            entry.lexForge = lexForgeCheck.isSelected
             entry.legacyForge = legacyForgeCheck.isSelected
         }
 
@@ -359,6 +372,12 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                         row.add(forgeVersionField)
                         versionFieldsPanel.add(row)
                     }
+                    "lexforge" -> {
+                        val row = JPanel(FlowLayout(FlowLayout.LEFT, 6, 1))
+                        row.add(JLabel("LexForge Version:"))
+                        row.add(lexForgeVersionField)
+                        versionFieldsPanel.add(row)
+                    }
                     "legacyforge" -> {
                         val row = JPanel(FlowLayout(FlowLayout.LEFT, 6, 1))
                         row.add(JLabel("Forge Version:"))
@@ -378,6 +397,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                 if (entry.fabric) add("fabric")
                 if (entry.neoforge) add("neoforge")
                 if (entry.forge) add("forge")
+                if (entry.lexForge) add("lexforge")
                 if (entry.legacyForge) add("legacyforge")
             }
             if (loaders.isNotEmpty()) {
@@ -412,11 +432,13 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
             entry.fabric = fabricCheck.isSelected
             entry.neoforge = neoforgeCheck.isSelected
             entry.forge = forgeCheck.isSelected
+            entry.lexForge = lexForgeCheck.isSelected
             entry.legacyForge = legacyForgeCheck.isSelected
             entry.fabricLoaderVersion = fabricLoaderField.text
             entry.fabricApiVersion = fabricApiField.text
             entry.neoforgeVersion = neoforgeVersionField.text
             entry.forgeVersion = forgeVersionField.text
+            entry.lexForgeVersion = lexForgeVersionField.text
             entry.legacyForgeVersion = legacyForgeVersionField.text
         }
     }
@@ -428,8 +450,8 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
         props.setValue("prism.lastLicense", license)
 
         val baseData = findBaseData()
-        val projectPath = baseData?.path ?: project.basePath ?: return
         val projectName = baseData?.name ?: project.name
+        val projectPath = baseData?.let { "${it.path}/${it.name}" } ?: project.basePath ?: return
 
         if (modId.isBlank()) modId = deriveModId(projectName)
         if (modName.isBlank()) modName = deriveModName(projectName)
@@ -447,6 +469,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                         if (entry.fabric) add("fabric")
                         if (entry.neoforge) add("neoforge")
                         if (entry.forge) add("forge")
+                        if (entry.lexForge) add("lexforge")
                         if (entry.legacyForge) add("legacyforge")
                     }.ifEmpty {
                         listOf(loaderKey(PrismVersionCatalog.validLoadersFor(entry.mcVersion).firstOrNull() ?: "Fabric"))
@@ -462,6 +485,7 @@ class PrismConfigStep(private val parent: NewProjectWizardStep) : AbstractNewPro
                     fabricApiVersion = entry.fabricApiVersion,
                     neoforgeVersion = entry.neoforgeVersion,
                     forgeVersion = entry.forgeVersion,
+                    lexForgeVersion = entry.lexForgeVersion,
                     legacyForgeVersion = entry.legacyForgeVersion,
                 )
             },

@@ -16,6 +16,7 @@ object PrismVersionCatalog {
         val fabricApiVersion: String = "",
         val neoforgeVersion: String = "",
         val forgeVersion: String = "",
+        val lexForgeVersion: String = "",
         val legacyForgeVersion: String = "",
     )
 
@@ -46,6 +47,7 @@ object PrismVersionCatalog {
             "1.21.4",
             "1.21.1",
             "1.20.1",
+            "1.19.2",
             "1.18.2",
             "1.12.2",
             "1.7.10",
@@ -75,11 +77,17 @@ object PrismVersionCatalog {
                 fabricLoaderVersion = "0.19.0",
                 fabricApiVersion = "0.116.10+1.21.1",
                 neoforgeVersion = "21.1.224",
+                lexForgeVersion = "52.1.2",
             ),
             "1.20.1" to LoaderDefaults(
                 fabricLoaderVersion = "0.19.0",
                 fabricApiVersion = "0.92.7+1.20.1",
                 forgeVersion = "47.4.18",
+            ),
+            "1.19.2" to LoaderDefaults(
+                fabricLoaderVersion = "0.19.0",
+                fabricApiVersion = "0.77.0+1.19.2",
+                forgeVersion = "43.4.4",
             ),
             "1.18.2" to LoaderDefaults(
                 fabricLoaderVersion = "0.19.0",
@@ -118,6 +126,7 @@ object PrismVersionCatalog {
 
     fun validLoadersFor(mcVersion: String): List<String> = when {
         mcVersion == "1.7.10" || mcVersion == "1.12.2" -> listOf("Legacy Forge")
+        supportsNeoForge(mcVersion) && supportsLexForge(mcVersion) -> listOf("Fabric", "NeoForge", "LexForge")
         supportsNeoForge(mcVersion) -> listOf("Fabric", "NeoForge")
         supportsForge(mcVersion) -> listOf("Fabric", "Forge")
         else -> listOf("Fabric")
@@ -154,6 +163,11 @@ object PrismVersionCatalog {
                 } else {
                     ""
                 },
+                lexForgeVersion = if (supportsLexForge(mcVersion)) {
+                    latestForgeMatch(forgeVersions, mcVersion)
+                } else {
+                    ""
+                },
                 legacyForgeVersion = if (mcVersion == "1.7.10" || mcVersion == "1.12.2") {
                     latestForgeMatch(forgeVersions, mcVersion)
                 } else {
@@ -167,6 +181,7 @@ object PrismVersionCatalog {
                 fabricApiVersion = resolved.fabricApiVersion.ifBlank { fallback.fabricApiVersion },
                 neoforgeVersion = resolved.neoforgeVersion.ifBlank { fallback.neoforgeVersion },
                 forgeVersion = resolved.forgeVersion.ifBlank { fallback.forgeVersion },
+                lexForgeVersion = resolved.lexForgeVersion.ifBlank { fallback.lexForgeVersion },
                 legacyForgeVersion = resolved.legacyForgeVersion.ifBlank { fallback.legacyForgeVersion },
             )
         }
@@ -224,7 +239,7 @@ object PrismVersionCatalog {
         if (version == "1.7.10" || version == "1.12.2") {
             return true
         }
-        return compareVersions(version, "1.18.2") >= 0 || version.startsWith("26.")
+        return compareVersions(version, "1.14") >= 0 || version.startsWith("26.")
     }
 
     private fun supportsForge(version: String): Boolean =
@@ -232,6 +247,9 @@ object PrismVersionCatalog {
 
     private fun supportsNeoForge(version: String): Boolean =
         compareVersions(version, "1.20.2") >= 0 || version.startsWith("26.")
+
+    private fun supportsLexForge(version: String): Boolean =
+        compareVersions(version, "1.21.1") >= 0 && !version.startsWith("26.")
 
     private fun toNeoForgePrefix(version: String): String =
         if (version.startsWith("1.")) version.removePrefix("1.") else version

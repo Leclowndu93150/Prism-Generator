@@ -29,6 +29,7 @@ object PrismProjectGenerator {
         val fabricApiVersion: String = "",
         val neoforgeVersion: String = "",
         val forgeVersion: String = "",
+        val lexForgeVersion: String = "",
         val legacyForgeVersion: String = "",
     )
 
@@ -144,6 +145,7 @@ object PrismProjectGenerator {
         "fabric" -> "fabric"
         "neoforge" -> "neoforge"
         "forge" -> "forge"
+        "lexforge" -> "lexForge"
         "legacyforge" -> "legacyForge"
         else -> loader
     }
@@ -202,6 +204,13 @@ object PrismProjectGenerator {
                                 appendLine("        forge {")
                                 appendLine("            loaderVersion = \"$fv\"")
                                 appendLine("            loaderVersionRange = \"[${fv.split(".").firstOrNull() ?: "47"},)\"")
+                                appendLine("        }")
+                            }
+                            "lexforge" -> {
+                                val lfv = version.lexForgeVersion.ifBlank { defaults?.lexForgeVersion.orEmpty() }
+                                appendLine("        lexForge {")
+                                appendLine("            loaderVersion = \"$lfv\"")
+                                appendLine("            loaderVersionRange = \"[${lfv.split(".").firstOrNull() ?: "52"},)\"")
                                 appendLine("        }")
                             }
                             "legacyforge" -> {
@@ -348,6 +357,7 @@ object PrismProjectGenerator {
             "fabric" -> writeFabricEntryPoint(dir, config, version, className)
             "neoforge" -> writeNeoForgeEntryPoint(dir, config, version, className)
             "forge" -> writeForgeEntryPoint(dir, config, version, className)
+            "lexforge" -> writeLexForgeEntryPoint(dir, config, version, className)
             "legacyforge" -> writeLegacyForgeEntryPoint(dir, config, version, className)
         }
     }
@@ -421,6 +431,29 @@ object PrismProjectGenerator {
         )
     }
 
+    private fun writeLexForgeEntryPoint(dir: File, config: PrismConfig, version: VersionConfig, className: String) {
+        val entryName = "${className}LexForge"
+        dir.resolve("$entryName.java").writeText(
+            buildString {
+                appendLine("package ${config.groupId}.${config.modId};")
+                appendLine()
+                appendLine("import net.minecraftforge.fml.common.Mod;")
+                appendLine()
+                appendLine("@Mod(\"${config.modId}\")")
+                appendLine("public class $entryName {")
+                appendLine()
+                appendLine("    public $entryName() {")
+                if (version.multiLoader) {
+                    appendLine("        ${className}.init();")
+                } else {
+                    appendLine("        System.out.println(\"${config.modName} initializing!\");")
+                }
+                appendLine("    }")
+                appendLine("}")
+            }
+        )
+    }
+
     private fun writeLegacyForgeEntryPoint(dir: File, config: PrismConfig, version: VersionConfig, className: String) {
         val entryName = "${className}LegacyForge"
         if (version.mcVersion == "1.7.10" || version.mcVersion == "1.12.2") {
@@ -464,6 +497,7 @@ object PrismProjectGenerator {
             "fabric" -> writeFabricModJson(resourcesDir, config, version)
             "neoforge" -> writeNeoForgeModsToml(resourcesDir, config, version)
             "forge" -> writeForgeModsToml(resourcesDir, config, version)
+            "lexforge" -> writeLexForgeModsToml(resourcesDir, config, version)
             "legacyforge" -> writeMcmodInfo(resourcesDir, config, version)
         }
 
@@ -629,6 +663,44 @@ object PrismProjectGenerator {
         )
     }
 
+    private fun writeLexForgeModsToml(resourcesDir: File, config: PrismConfig, version: VersionConfig) {
+        val metaDir = resourcesDir.resolve("META-INF")
+        metaDir.mkdirs()
+
+        metaDir.resolve("mods.toml").writeText(
+            buildString {
+                appendLine("modLoader = \"javafml\"")
+                appendLine("loaderVersion = \"${placeholder("lexforge_loader_version_range")}\"")
+                appendLine("license = \"${placeholder("license")}\"")
+                appendLine()
+                appendLine("[[mods]]")
+                appendLine("modId = \"${placeholder("mod_id")}\"")
+                appendLine("version = \"${placeholder("version")}\"")
+                appendLine("displayName = \"${placeholder("mod_name")}\"")
+                appendLine("description = \"${placeholder("description")}\"")
+                appendLine()
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
+                appendLine("modId = \"forge\"")
+                appendLine("mandatory = true")
+                appendLine("versionRange = \"${placeholder("lexforge_loader_version_range")}\"")
+                appendLine("ordering = \"NONE\"")
+                appendLine("side = \"BOTH\"")
+                appendLine()
+                appendLine("[[dependencies.${placeholder("mod_id")}]]")
+                appendLine("modId = \"minecraft\"")
+                appendLine("mandatory = true")
+                appendLine("versionRange = \"[${placeholder("minecraft_version")},)\"")
+                appendLine("ordering = \"NONE\"")
+                appendLine("side = \"BOTH\"")
+                if (config.enableMixins) {
+                    appendLine()
+                    appendLine("[[mixins]]")
+                    appendLine("config = \"${placeholder("mod_id")}.mixins.json\"")
+                }
+            }
+        )
+    }
+
     private fun writeMcmodInfo(resourcesDir: File, config: PrismConfig, version: VersionConfig) {
         resourcesDir.resolve("mcmod.info").writeText(
             buildString {
@@ -686,7 +758,7 @@ object PrismProjectGenerator {
                     "accessWidener\tv2\tnamed\n"
                 )
             }
-            "neoforge", "forge" -> {
+            "neoforge", "forge", "lexforge" -> {
                 val metaDir = resourcesDir.resolve("META-INF")
                 metaDir.mkdirs()
                 metaDir.resolve("accesstransformer.cfg").writeText(
